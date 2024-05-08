@@ -283,22 +283,6 @@ const findAllValidBoardStates = (letters, board) => {
                 const direction = [Math.abs(offsetPair[0]), Math.abs(offsetPair[1])];
                 const perpendicularDirection = [direction[1], direction[0]];
 
-                // if (boardGet(newX, newY, board)) {
-                //     if (!validSubstring(newX, newY, perpendicularDirection, board)) {
-                //         return;
-                //     }
-
-                //     const wordInfo = findWord(newX, newY, perpendicularDirection, board);
-                //     executionFrames.push({
-                //         startingIndex: wordInfo.startingIndex,
-                //         endingIndex: wordInfo.endingIndex,
-                //         board: structuredClone(board),
-                //         direction: perpendicularDirection,
-                //         letters,
-                //     });
-                //     return;
-                // }
-
                 letters.forEach((letter, letterIndex) => {
                     const tempBoard = structuredClone(board);
                     boardSet(newX, newY, letter, tempBoard);
@@ -361,8 +345,6 @@ const findAllValidBoardStates = (letters, board) => {
                 const tempBoard = structuredClone(currentBoard);
                 const [newX, newY] = possibleLocation;
 
-                // todo : ensure that there can't already be a letter at newX or newY because it'd be detected by the findWord
-
                 boardSet(newX, newY, letter, tempBoard);
                 
                 if (!validSubstring(newX, newY, direction, tempBoard)) {
@@ -381,7 +363,6 @@ const findAllValidBoardStates = (letters, board) => {
                 }
 
                 const wordInfo = findWord(newX, newY, direction, tempBoard);
-
                 executionFrames.push({
                     startingIndex: wordInfo.startingIndex,
                     endingIndex: wordInfo.endingIndex,
@@ -401,7 +382,7 @@ console.log('starting')
 printBoard(globalBoard)
 const validBoards = findAllValidBoardStates(['I', 'E', 'S'], globalBoard);
 
-// console.log(validBoards.length)
+console.log(validBoards.length)
 
 // validBoards.forEach((validBoard) => {
 //     printBoard(validBoard)
