@@ -331,7 +331,7 @@ const validSubstring = (x, y, dir, board) => {
 
 // ------ score functions ------
 
-const naiveWordScore = (wordInfo, board) => {
+const naiveWordScore = (wordInfo, board, logging = false) => {
     let totalWordMultiplier = 1;
     let wordScore = 0;
     for (let i = 0; i < wordInfo.length; ++i) {
@@ -351,18 +351,21 @@ const naiveWordScore = (wordInfo, board) => {
     return wordScore;
 }
 
-const calculateFinalScore = (validFrame) => {
+const calculateFinalScore = (validFrame, logging=false) => {
     const { board, addedLetters, direction, perpendicularDirection } = validFrame;
 
     const wordInfo = findWord(addedLetters[0].x, addedLetters[0].y, direction, board);
-
+    if (logging) console.log(wordInfo.word, naiveWordScore(wordInfo, board, logging))
+        
     let totalScore = naiveWordScore(wordInfo, board);
-
+        
     addedLetters.forEach((letter) => {
         const perpWordInfo = findWord(letter.x, letter.y, perpendicularDirection, board);
         if (perpWordInfo.length == 1) {
             return;
         }
+
+        if (logging) console.log(perpWordInfo.word, naiveWordScore(perpWordInfo, board, logging))
 
         const smallWordScore = naiveWordScore(perpWordInfo, board);
 
@@ -569,6 +572,7 @@ const findBestBoard = (validFrames) => {
     }, { score: 0, index: -1 })
 
     console.log('best score', bestScoreIndexCombo.score);
+    calculateFinalScore(validFrames[bestScoreIndexCombo.index], true);
 
     return validFrames[bestScoreIndexCombo.index].board;
 }
