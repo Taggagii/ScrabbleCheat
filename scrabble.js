@@ -1,63 +1,25 @@
-// visual board stuff
-const board = document.getElementById('board');
-const SQUARES_PER_SIDE = 15;
 
-const inputs = [];
+const fs = require('fs');
+const prompt = require('prompt-sync')();
 
-for (let y = 0; y < SQUARES_PER_SIDE; ++y) {
-    const row = [];
-    for (let x = 0; x < SQUARES_PER_SIDE; ++x) {
-        const tile = document.createElement('div');
-        tile.classList.add('tile');
-        
-        const textInput = document.createElement('input');
-        textInput.classList.add('tileInput');
-
-        textInput.addEventListener('keydown', (event) => {
-            event.preventDefault();
-
-            let inputValue = event.key?.toUpperCase();
-            let direction = 1
-            let border = SQUARES_PER_SIDE;
-
-            if (inputValue === 'BACKSPACE') {
-                direction = -1;
-                border = -1;
-                inputValue = '';
-            } else if (inputValue === ' ') {
-                inputValue = '';
-            }
-
-            if (inputValue.length > 1 || (inputValue !== '' && !inputValue.match(/[A-Z ]/))) return;
-
-            event.target.value = inputValue;
-
-            const nextX = ((x + direction % SQUARES_PER_SIDE) + SQUARES_PER_SIDE) % SQUARES_PER_SIDE;
-            const nextY = y + direction * Boolean(direction * nextX < direction * x);
-
-            if (nextY < 0 || nextY >= SQUARES_PER_SIDE) return;
-
-            inputs[nextY][nextX].focus();
-        });
-
-        row.push(textInput);
-
-
-        tile.appendChild(textInput);
-
-        board.appendChild(tile);
-    }
-    inputs.push(row);
-}
-
-// ------ board initialization functions ------
+const VERTICAL = [0, 1];
+const HORIZONTAL = [1, 0];
 
 const buildBoard = () => {
-    const board = inputs.map((row) => row.map((input) => ({
-        letter: input.value,
-        wordMultiplier: 1,
-        letterMultiplier: 1,
-    })));
+    const boardSideLength = 15;
+    const board = [];
+
+    for (let y = 0; y < boardSideLength; ++y) {
+        const temp = [];
+        for (let x = 0; x < boardSideLength; ++x) {
+            temp.push({
+                letter: '',
+                wordMultiplier: 1,
+                letterMultiplier: 1,
+            });
+        }
+        board.push(temp);
+    }
 
     const tripleWordLocations = [
         [0, 0],
@@ -154,30 +116,11 @@ const buildBoard = () => {
     return board;
 };
 
-// ------ initialize structures ------
-const VERTICAL = [0, 1];
-const HORIZONTAL = [1, 0];
+const globalBoard = buildBoard();
 
-let file = new XMLHttpRequest();
-file.open("GET", "/wordlist.txt", false);
-let wordListRaw = '';
-file.onreadystatechange = () => {
-    if (file.readyState === 4 && (file.status === 200 || file.status == 0)) {
-        wordListRaw = file.responseText;
-    }
-}
-file.send(null);
+const wordListRaw = fs.readFileSync('wordlist.txt', 'utf8');
 const wordList = wordListRaw.split('\n').map((word) => word.trim());
 const wordListLookup = new Set(wordList);
-
-const substringLookup = new Set();
-wordList.forEach((word) => {
-    for (let i = 1; i <= word.length; ++i) {
-        for (let ii = 0; ii < i; ++ii) {
-            substringLookup.add(word.slice(ii, i));
-        }
-    }
-});
 
 const letterValueLookup = {
     "A": 1,
@@ -216,7 +159,14 @@ const letterValueLookup = {
 
 }
 
-// ------ board functions ------
+const substringLookup = new Set();
+wordList.forEach((word) => {
+    for (let i = 1; i <= word.length; ++i) {
+        for (let ii = 0; ii < i; ++ii) {
+            substringLookup.add(word.slice(ii, i));
+        }
+    }
+});
 
 const boardSet = (x, y, value, board, invalidateLocation = false) => {
     if (!board[y] || !board[y][x]) {
@@ -242,6 +192,7 @@ const boardGet = (x, y, board) => {
     return board[y][x].letter;
 }
 
+
 const printBoard = (board) => {
     board.forEach((line) => {
         const lineToPrint = line.map((tile) => {
@@ -264,8 +215,6 @@ const printBoard = (board) => {
         console.log('-'.repeat(lineToPrint.length))
     })
 }
-
-// ------ low level scrabble functions ------
 
 const findWord = (x, y, dir, board) => {
     if (!boardGet(x, y, board)) {
@@ -313,54 +262,14 @@ const validSubstring = (x, y, dir, board) => {
     return substringLookup.has(substringInfo.word);
 }
 
-// ------ score functions ------
+// printBoard()
 
-const naiveWordScore = (wordInfo, board) => {
-    let totalWordMultiplier = 1;
-    let wordScore = 0;
-    for (let i = 0; i < wordInfo.length; ++i) {
-        const x = wordInfo.startingIndex[0] + wordInfo.direction[0] * i;
-        const y = wordInfo.startingIndex[1] + wordInfo.direction[1] * i;
 
-        const letterInfo = board[y][x];
 
-        totalWordMultiplier *= letterInfo.wordMultiplier;
+// console.log(validWord(11, 7, HORIZONTAL))
+// console.log(validPrefix(11, 7, HORIZONTAL))
 
-        const letterScore = letterValueLookup[letterInfo.letter] * letterInfo.letterMultiplier;
-        wordScore += letterScore;
-    }
-    wordScore *= totalWordMultiplier;
-
-    return wordScore;
-}
-
-const calculateFinalScore = (validFrame) => {
-    const { board, addedLetters, direction, perpendicularDirection } = validFrame;
-
-    // printBoard(board);
-
-    const wordInfo = findWord(addedLetters[0].x, addedLetters[0].y, direction, board);
-
-    let totalScore = naiveWordScore(wordInfo, board);
-    // console.log('score of big word', wordInfo.word, totalScore)
-
-    addedLetters.forEach((letter) => {
-        const perpWordInfo = findWord(letter.x, letter.y, perpendicularDirection, board);
-        if (perpWordInfo.length == 1) {
-            return;
-        }
-
-        // console.log('score of word', perpWordInfo.word, naiveWordScore(perpWordInfo, board))
-
-        totalScore += naiveWordScore(perpWordInfo, board);
-    });
-
-    return totalScore
-}
-
-// ------ high level scrabble functions ------
-
-const findAllValidFrames = async (letters, board) => {
+const findAllValidBoardStates = (letters, board) => {
     const executionFrames = [];
     const validBoards = [];
 
@@ -434,34 +343,10 @@ const findAllValidFrames = async (letters, board) => {
         }
     }
 
-
-    
-
-    const progressBar = document.getElementById('progressBar');
-    const boardStates = document.getElementById('boardStates');
-    progressBar.innerHTML = "50";
-    
     console.log('starting execution frame computation', executionFrames.length)
-    
-    const sleep = async (ms) => new Promise((r) => setTimeout(r, ms));
-    
-    let i = 0;
-    let max = 0;
     // handle execution frames
     while (executionFrames.length) {
-        max = Math.max(max, executionFrames.length);
-        if (++i >= 500) {
-            progressBar.value = Math.floor((executionFrames.length / max) * 100);
-            boardStates.innerHTML = `Remaining board states to compute: ${executionFrames.length}`;
-            i = 0;
-            await sleep(0)
-        }
-
-        // console.log('execution frames left', executionFrames.length)
-        
-        // progressBar.value = executionFrames.length / 4000;
-        // progressBar.innerHTML = `Frames: ${executionFrames.length}`
-        // progressBar.max = Math.max(progressBar.max, executionFrames.length).toString();
+        console.log('execution frames left', executionFrames.length)
         const currentFrame = executionFrames.shift()
         const { startingIndex, endingIndex, direction, addedLetters } = currentFrame;
         const perpendicularDirection = [direction[1], direction[0]];
@@ -513,47 +398,142 @@ const findAllValidFrames = async (letters, board) => {
         });
     }
 
-    boardStates.innerHTML = '';
-
     return validBoards
 }
 
-const findBestBoard = (validFrames) => {
-    const bestScoreIndexCombo = validFrames.reduce((bestCombo, validFrame, index) => {
-        const score = calculateFinalScore(validFrame);
-        if (score > bestCombo.score) {
-            return { index, score };
-        }
-        return bestCombo;
-    }, { score: 0, index: -1 })
 
-    return validFrames[bestScoreIndexCombo.index].board;
-}
+const naiveWordScore = (wordInfo, board) => {
+    let totalWordMultiplier = 1;
+    let wordScore = 0;
+    for (let i = 0; i < wordInfo.length; ++i) {
+        const x = wordInfo.startingIndex[0] + wordInfo.direction[0] * i;
+        const y = wordInfo.startingIndex[1] + wordInfo.direction[1] * i;
 
+        const letterInfo = board[y][x];
 
-// ------ front end interaction functions ------
+        totalWordMultiplier *= letterInfo.wordMultiplier;
 
-const updateFrontEndBoard = (board) => {
-    for (let y = 0; y < SQUARES_PER_SIDE; ++y) {
-        for (let x = 0; x < SQUARES_PER_SIDE; ++x) {
-            inputs[y][x].value = board[y][x].letter;
-        }
+        const letterScore = letterValueLookup[letterInfo.letter] * letterInfo.letterMultiplier;
+        wordScore += letterScore;
     }
+    wordScore *= totalWordMultiplier;
+
+    return wordScore;
 }
 
-const main = async () => {
-    const currentBoard = buildBoard();
+const calculateFinalScore = (validFrame) => {
+    const { board, addedLetters, direction, perpendicularDirection } = validFrame;
 
-    const letters = document.getElementById('letters')
+    // printBoard(board);
 
-    const validFrames = await findAllValidFrames(letters.value.split(''), currentBoard);
+    const wordInfo = findWord(addedLetters[0].x, addedLetters[0].y, direction, board);
 
-    console.log(validFrames);
+    let totalScore = naiveWordScore(wordInfo, board);
+    // console.log('score of big word', wordInfo.word, totalScore)
 
-    const bestBoard = findBestBoard(validFrames);
+    addedLetters.forEach((letter) => {
+        const perpWordInfo = findWord(letter.x, letter.y, perpendicularDirection, board);
+        if (perpWordInfo.length == 1) {
+            return;
+        }
 
-    updateFrontEndBoard(bestBoard);
+        // console.log('score of word', perpWordInfo.word, naiveWordScore(perpWordInfo, board))
+
+        totalScore += naiveWordScore(perpWordInfo, board);
+    });
+
+    return totalScore
 }
 
+boardSet(7, 7, 'I', globalBoard, true);
+boardSet(8, 7, 'O', globalBoard, true);
+boardSet(9, 7, 'N', globalBoard, true);
+
+boardSet(7, 6, 'A', globalBoard, true);
+boardSet(8, 6, 'D', globalBoard, true);
+boardSet(6, 6, 'G', globalBoard, true);
+boardSet(5, 6, 'E', globalBoard, true);
+
+boardSet(8, 8, 'E', globalBoard, true);
+
+boardSet(5, 5, 'B', globalBoard, true);
+boardSet(4, 5, 'E', globalBoard, true);
+boardSet(3, 5, 'R', globalBoard, true);
+
+boardSet(7, 5, 'L', globalBoard, true);
+boardSet(7, 8, 'D', globalBoard, true);
+
+boardSet(7, 4, 'R', globalBoard, true);
+boardSet(7, 3, 'E', globalBoard, true);
+boardSet(7, 2, 'T', globalBoard, true);
+boardSet(7, 1, 'N', globalBoard, true);
+boardSet(7, 0, 'I', globalBoard, true);
+
+boardSet(6, 2, 'A', globalBoard, true);
+boardSet(8, 2, 'E', globalBoard, true);
+
+boardSet(5, 2, 'C', globalBoard, true);
+boardSet(4, 2, 'N', globalBoard, true);
+boardSet(3, 2, 'I', globalBoard, true);
+boardSet(2, 2, 'Z', globalBoard, true);
+
+boardSet(8, 1, 'A', globalBoard, true);
+
+boardSet(9, 1, 'N', globalBoard, true);
+boardSet(9, 2, 'S', globalBoard, true);
+boardSet(9, 0, 'U', globalBoard, true);
+
+boardSet(5, 8, 'W', globalBoard, true);
+boardSet(6, 8, 'I', globalBoard, true);
+
+boardSet(2, 3, 'A', globalBoard, true);
+boardSet(1, 3, 'I', globalBoard, true);
+boardSet(3, 3, 'T', globalBoard, true);
+boardSet(0, 3, 'F', globalBoard, true);
+
+boardSet(5, 1, 'U', globalBoard, true);
+boardSet(5, 3, 'S', globalBoard, true);
+
+boardSet(0, 4, 'L', globalBoard, true);
+boardSet(0, 5, 'A', globalBoard, true);
+boardSet(0, 6, 'V', globalBoard, true);
+boardSet(0, 7, 'O', globalBoard, true);
+boardSet(0, 8, 'N', globalBoard, true);
+boardSet(0, 9, 'E', globalBoard, true);
+
+boardSet(1, 9, 'T', globalBoard, true);
+boardSet(2, 9, 'A', globalBoard, true);
+
+boardSet(2, 10, 'H', globalBoard, true);
+boardSet(3, 10, 'E', globalBoard, true);
+boardSet(4, 10, 'P', globalBoard, true);
+boardSet(5, 10, 'S', globalBoard, true);
 
 
+
+printBoard(globalBoard)
+
+
+
+prompt('This board good?');
+console.log('finding board states')
+const validBoards = findAllValidBoardStates('EEPEHQI'.split(''), globalBoard);
+
+console.log(validBoards.length)
+
+console.log('getting scores')
+const bestScoreIndexCombo = validBoards.reduce((bestCombo, validFrame, index) => {
+    const score = calculateFinalScore(validFrame);
+    if (score > bestCombo.score) {
+        return { index, score };
+    }
+    return bestCombo;
+}, { score: 0, index: -1 })
+
+
+console.log(bestScoreIndexCombo)
+printBoard(validBoards[bestScoreIndexCombo.index].board)
+
+validBoards[bestScoreIndexCombo.index].addedLetters.forEach((letter) => {
+    console.log(`boardSet(${letter.x}, ${letter.y}, '${letter.letter}', globalBoard, true);`)
+});

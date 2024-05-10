@@ -1,0 +1,21 @@
+:root {
+    --tile-size: 50px;
+    --tiles-per-side: 15;
+}
+
+div#board {
+    display: grid;
+    grid-template-columns: repeat(var(--tiles-per-side), var(--tile-size));
+    grid-template-rows: repeat(var(--tiles-per-side), var(--tile-size));
+}
+
+div.tile {
+    background-color: blue;
+    position: inline; 
+}
+
+div.tile > input {
+    width: var(--tile-size);
+    height: var(--tile-size);
+    outline: none;
+}
