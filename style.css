@@ -10,12 +10,37 @@ div#board {
 }
 
 div.tile {
-    background-color: blue;
     position: inline; 
 }
 
 div.tile > input {
     width: var(--tile-size);
     height: var(--tile-size);
-    outline: none;
+    text-align: center;
+    outline: 1px solid lightgray;
+    border: none;
+}
+
+input.placedInput {
+    background-color: gray;
+}
+
+input.newlyPlacedInput {
+    background-color: red;
+}
+
+input.doubleLetterScore {
+    background-color: yellow;
+}
+
+input.tripleLetterScore {
+    background-color: orange;
+}
+
+input.doubleWordScore {
+    background-color: blue;
+}
+
+input.tripleWordScore {
+    background-color: purple;
 }

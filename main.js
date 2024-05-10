@@ -4,6 +4,8 @@ const SQUARES_PER_SIDE = 15;
 
 const inputs = [];
 
+let vertical = false;
+
 for (let y = 0; y < SQUARES_PER_SIDE; ++y) {
     const row = [];
     for (let x = 0; x < SQUARES_PER_SIDE; ++x) {
@@ -32,8 +34,15 @@ for (let y = 0; y < SQUARES_PER_SIDE; ++y) {
 
             event.target.value = inputValue;
 
-            const nextX = ((x + direction % SQUARES_PER_SIDE) + SQUARES_PER_SIDE) % SQUARES_PER_SIDE;
-            const nextY = y + direction * Boolean(direction * nextX < direction * x);
+            const oldX = vertical ? y : x;
+            const oldY = vertical ? x : y;
+
+            let nextX = ((oldX + direction % SQUARES_PER_SIDE) + SQUARES_PER_SIDE) % SQUARES_PER_SIDE;
+            let nextY = oldY + direction * Number(direction * nextX < direction * oldX);
+
+            nextX ^= Number(vertical) * nextY;
+            nextY ^= Number(vertical) * nextX;
+            nextX ^= Number(vertical) * nextY;
 
             if (nextY < 0 || nextY >= SQUARES_PER_SIDE) return;
 
@@ -87,6 +96,7 @@ const buildBoard = () => {
         [11, 11],
         [12, 12],
         [13, 13],
+        [7, 7],
     ];
 
     const tripleLetterLocations = [
@@ -133,25 +143,30 @@ const buildBoard = () => {
 
     tripleWordLocations.forEach((location) => {
         const [x, y] = location;
-        board[x][y].wordMultiplier = 3;
+        if (board[y][x].letter) return;
+        board[y][x].wordMultiplier = 3;
     });
 
     doubleWordLocations.forEach((location) => {
         const [x, y] = location;
-        board[x][y].wordMultiplier = 2;
+        if (board[y][x].letter) return;
+        board[y][x].wordMultiplier = 2;
     });
 
     tripleLetterLocations.forEach((location) => {
         const [x, y] = location;
-        board[x][y].letterMultiplier = 3;
+        if (board[y][x].letter) return;
+        board[y][x].letterMultiplier = 3;
     });
 
     doubleLetterLocations.forEach((location) => {
         const [x, y] = location;
-        board[x][y].letterMultiplier = 2;
+        if (board[y][x].letter) return;
+        board[y][x].letterMultiplier = 2;
     });
+    
 
-    return board;
+    return structuredClone(board);
 };
 
 // ------ initialize structures ------
@@ -190,6 +205,7 @@ const letterValueLookup = {
     "S": 1,
     "T": 1,
     "R": 1,
+
     "D": 2,
     "G": 2,
 
@@ -245,17 +261,17 @@ const boardGet = (x, y, board) => {
 const printBoard = (board) => {
     board.forEach((line) => {
         const lineToPrint = line.map((tile) => {
+            
+            if (tile.letterMultiplier > 1) {
+                return tile.letterMultiplier;
+            }
+            
+            if (tile.wordMultiplier > 1) {
+                return tile.wordMultiplier;
+            }
             if (tile.letter) {
                 return tile.letter;
             }
-
-            // if (tile.letterMultiplier > 1) {
-            //     return tile.letterMultiplier;
-            // }
-
-            // if (tile.wordMultiplier > 1) {
-            //     return tile.wordMultiplier;
-            // }
 
             return ' '
 
@@ -329,6 +345,7 @@ const naiveWordScore = (wordInfo, board) => {
         const letterScore = letterValueLookup[letterInfo.letter] * letterInfo.letterMultiplier;
         wordScore += letterScore;
     }
+
     wordScore *= totalWordMultiplier;
 
     return wordScore;
@@ -337,12 +354,9 @@ const naiveWordScore = (wordInfo, board) => {
 const calculateFinalScore = (validFrame) => {
     const { board, addedLetters, direction, perpendicularDirection } = validFrame;
 
-    // printBoard(board);
-
     const wordInfo = findWord(addedLetters[0].x, addedLetters[0].y, direction, board);
 
     let totalScore = naiveWordScore(wordInfo, board);
-    // console.log('score of big word', wordInfo.word, totalScore)
 
     addedLetters.forEach((letter) => {
         const perpWordInfo = findWord(letter.x, letter.y, perpendicularDirection, board);
@@ -350,10 +364,14 @@ const calculateFinalScore = (validFrame) => {
             return;
         }
 
-        // console.log('score of word', perpWordInfo.word, naiveWordScore(perpWordInfo, board))
+        const smallWordScore = naiveWordScore(perpWordInfo, board);
 
-        totalScore += naiveWordScore(perpWordInfo, board);
+        totalScore += smallWordScore;
     });
+
+    if (addedLetters.length === 7) {
+        totalScore += 50; // bingo!
+    }
 
     return totalScore
 }
@@ -371,11 +389,15 @@ const findAllValidFrames = async (letters, board) => {
         [1, 0],
         [0, 1],
         [0, -1]
-    ]
+    ];
+    const ordinals = [VERTICAL, HORIZONTAL];
+
     console.log('building execution boards')
+    let noActiveBoards = true;
     for (let x = 0; x < board.length; ++x) {
         for (let y = 0; y < board.length; ++y) {
             if (!boardGet(x, y, board)) continue;
+            noActiveBoards = false
 
             // active tile
             // go to all surrounding tiles
@@ -414,7 +436,6 @@ const findAllValidFrames = async (letters, board) => {
                 });
             })
 
-            const ordinals = [VERTICAL, HORIZONTAL];
 
             ordinals.forEach((direction) => {
                 if (validSubstring(x, y, direction, board)) {
@@ -434,8 +455,28 @@ const findAllValidFrames = async (letters, board) => {
         }
     }
 
+    if (noActiveBoards) {
+        const centerX = 7;
+        const centerY = 7;
+        letters.forEach((letter, letterIndex) => {
+            ordinals.forEach((direction) => {
+                const tempBoard = structuredClone(board);
+                boardSet(centerX, centerY, letter, tempBoard);
 
-    
+                const wordInfo = findWord(centerX, centerY, direction, tempBoard);
+                executionFrames.push({
+                    startingIndex: wordInfo.startingIndex,
+                    endingIndex: wordInfo.endingIndex,
+                    board: tempBoard,
+                    direction: direction,
+                    letters: [...letters.slice(0, letterIndex), ...letters.slice(letterIndex + 1)],
+                    addedLetters: [{ x: centerX, y: centerY, letter }]
+                });
+
+            });
+
+        });
+    } 
 
     const progressBar = document.getElementById('progressBar');
     const boardStates = document.getElementById('boardStates');
@@ -527,6 +568,8 @@ const findBestBoard = (validFrames) => {
         return bestCombo;
     }, { score: 0, index: -1 })
 
+    console.log('best score', bestScoreIndexCombo.score);
+
     return validFrames[bestScoreIndexCombo.index].board;
 }
 
@@ -536,10 +579,38 @@ const findBestBoard = (validFrames) => {
 const updateFrontEndBoard = (board) => {
     for (let y = 0; y < SQUARES_PER_SIDE; ++y) {
         for (let x = 0; x < SQUARES_PER_SIDE; ++x) {
-            inputs[y][x].value = board[y][x].letter;
+            const newClassList = [];
+
+            if (!board[y][x].letter) {
+                if (board[y][x].letterMultiplier === 2) {
+                    newClassList.push('doubleLetterScore');
+                } else if (board[y][x].letterMultiplier === 3) {
+                    newClassList.push('tripleLetterScore');
+                } else if (board[y][x].wordMultiplier === 2) {
+                    newClassList.push('doubleWordScore');
+                } else if (board[y][x].wordMultiplier === 3) {
+                    newClassList.push('tripleWordScore');
+                }
+            } else {
+                const newLetter = !inputs[y][x].value && board[y][x].letter;
+    
+                inputs[y][x].value = board[y][x].letter;
+    
+                if (newLetter) {
+                    newClassList.push('newlyPlacedInput');
+                } else {
+                    newClassList.push('placedInput');
+                }
+            }
+            
+
+            inputs[y][x].classList = newClassList;
+            
         }
     }
 }
+
+updateFrontEndBoard(buildBoard());
 
 const main = async () => {
     const currentBoard = buildBoard();
@@ -548,12 +619,28 @@ const main = async () => {
 
     const validFrames = await findAllValidFrames(letters.value.split(''), currentBoard);
 
-    console.log(validFrames);
-
     const bestBoard = findBestBoard(validFrames);
 
     updateFrontEndBoard(bestBoard);
 }
 
+
+const directionSwapButton = document.getElementById('directionSwap');
+
+const swapTypingDirection = (event) => {
+    vertical ^= 1;
+
+    directionSwapButton.value = 'Typing direction: ' + (vertical ? 'vertical' : 'horizontal');
+    event.preventDefault();
+}
+
+directionSwapButton.addEventListener('mousedown', swapTypingDirection);
+
+board.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab') {
+        swapTypingDirection(event);
+    }
+
+})
 
 
